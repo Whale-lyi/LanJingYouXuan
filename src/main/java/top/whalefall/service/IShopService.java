@@ -1,6 +1,7 @@
 package top.whalefall.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import top.whalefall.dto.Result;
 import top.whalefall.entity.Shop;
 
 /**
@@ -11,4 +12,7 @@ import top.whalefall.entity.Shop;
  */
 public interface IShopService extends IService<Shop> {
 
+    Result queryById(Long id);
+
+    Result update(Shop shop);
 }
