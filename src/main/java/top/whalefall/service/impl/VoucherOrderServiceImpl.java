@@ -1,7 +1,10 @@
 package top.whalefall.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import top.whalefall.dto.Result;
 import top.whalefall.entity.SeckillVoucher;
@@ -11,6 +14,7 @@ import top.whalefall.service.ISeckillVoucherService;
 import top.whalefall.service.IVoucherOrderService;
 import org.springframework.stereotype.Service;
 import top.whalefall.utils.RedisIdWorker;
+import top.whalefall.utils.SimpleRedisLock;
 import top.whalefall.utils.UserHolder;
 
 import javax.annotation.Resource;
@@ -31,6 +35,12 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private RedisIdWorker redisIdWorker;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private RedissonClient redissonClient;
+
     @Override
     public Result seckillVoucher(Long voucherId) {
         // 查询代金券
@@ -49,14 +59,35 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
 
         Long userId = UserHolder.getUser().getId();
-        // 保证用户id一样时，使用的同一把锁
-        // 保证先获取锁，再提交事务，再释放锁
-        synchronized (userId.toString().intern()) {
-            // 由于 @Transactional 是通过代理对象实现的，如果直接使用this.createVoucherOrder(), 事务是不生效的
-            // 获取代理对象
+
+        // 分布式锁
+        // 创建锁
+        // SimpleRedisLock lock = new SimpleRedisLock("order:" + userId, stringRedisTemplate);
+        RLock lock = redissonClient.getLock("lock:order:" + userId);
+        // 获取锁
+        // boolean isLock = lock.tryLock(1200);
+        boolean isLock = lock.tryLock();
+        if (!isLock) {
+            // 获取锁失败
+            return Result.fail("不允许重复下单");
+        }
+        // 获取锁成功
+        try {
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
+        } finally {
+            lock.unlock();
         }
+
+        // 单机模式下的锁
+//        // 保证用户id一样时，使用的同一把锁
+//        // 保证先获取锁，再提交事务，再释放锁
+//        synchronized (userId.toString().intern()) {
+//            // 由于 @Transactional 是通过代理对象实现的，如果直接使用this.createVoucherOrder(), 事务是不生效的
+//            // 获取代理对象
+//            IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
+//            return proxy.createVoucherOrder(voucherId);
+//        }
     }
 
     @Transactional
