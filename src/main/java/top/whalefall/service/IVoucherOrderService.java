@@ -1,6 +1,7 @@
 package top.whalefall.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
+import top.whalefall.dto.Result;
 import top.whalefall.entity.VoucherOrder;
 
 /**
@@ -11,4 +12,7 @@ import top.whalefall.entity.VoucherOrder;
  */
 public interface IVoucherOrderService extends IService<VoucherOrder> {
 
+    Result seckillVoucher(Long voucherId);
+
+    Result createVoucherOrder(Long voucherId);
 }
